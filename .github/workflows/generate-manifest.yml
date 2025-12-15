@@ -1,0 +1,51 @@
+name: Generate Static Files Manifest
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'static/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate-manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate manifest
+        run: |
+          echo "{" > static/manifest.json
+          echo '  "files": [' >> static/manifest.json
+
+          first=true
+          for file in static/*; do
+            if [ -f "$file" ] && [ "$(basename "$file")" != "manifest.json" ]; then
+              filename=$(basename "$file")
+              if [ "$first" = true ]; then
+                echo "    \"$filename\"" >> static/manifest.json
+                first=false
+              else
+                echo "    ,\"$filename\"" >> static/manifest.json
+              fi
+            fi
+          done
+
+          echo '  ],' >> static/manifest.json
+          echo "  \"generated\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"" >> static/manifest.json
+          echo "}" >> static/manifest.json
+
+          cat static/manifest.json
+
+      - name: Commit manifest
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add static/manifest.json
+          git diff --quiet && git diff --staged --quiet || git commit -m "Update manifest.json [skip ci]"
+          git push
