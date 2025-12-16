@@ -1,0 +1,12 @@
+[
+  {
+    "formulas": [
+      "0 \\in \\mathbb{N}",
+      "\\forall n \\in \\mathbb{N}, \\exists S(n) \\in \\mathbb{N}",
+      "\\forall n \\in \\mathbb{N}, S(n) \\neq 0",
+      "\\forall m, n \\in \\mathbb{N}, S(m) = S(n) \\implies m = n",
+      "\\forall P \\subseteq \\mathbb{N}, [0 \\in P \\land (\\forall n \\in P, S(n) \\in P)] \\implies P = \\mathbb{N}"
+    ],
+    "label": "Peano Axioms"
+  }
+]
