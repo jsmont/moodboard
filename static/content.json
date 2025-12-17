@@ -1,0 +1,28 @@
+[
+  {
+    "type": "quote",
+    "text": "The only way to do great work is to love what you do.",
+    "author": "Steve Jobs"
+  },
+  {
+    "type": "quote",
+    "text": "Innovation distinguishes between a leader and a follower.",
+    "author": "Steve Jobs",
+    "source": "Apple Worldwide Developers Conference, 1997"
+  },
+  {
+    "type": "quote",
+    "text": "Stay hungry, stay foolish."
+  },
+  {
+    "type": "formula",
+    "formulas": [
+      "0 \\in \\mathbb{N}",
+      "\\forall n \\in \\mathbb{N}, \\exists S(n) \\in \\mathbb{N}",
+      "\\forall n \\in \\mathbb{N}, S(n) \\neq 0",
+      "\\forall m, n \\in \\mathbb{N}, S(m) = S(n) \\implies m = n",
+      "\\forall P \\subseteq \\mathbb{N}, [0 \\in P \\land (\\forall n \\in P, S(n) \\in P)] \\implies P = \\mathbb{N}"
+    ],
+    "label": "Peano Axioms"
+  }
+]

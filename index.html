@@ -98,8 +98,7 @@
     const loading = document.getElementById("loading");
     const MANIFEST_PATH = 'manifest.json';
     const STATIC_FOLDER = 'static';
-    const QUOTES_PATH = `${STATIC_FOLDER}/quotes.json`;
-    const FORMULAS_PATH = `${STATIC_FOLDER}/formulas.json`;
+    const CONTENT_PATH = `${STATIC_FOLDER}/content.json`;
 
     function createQuoteCard(quote) {
         const item = document.createElement('div');
@@ -171,24 +170,13 @@
         return array;
     }
 
-    async function loadQuotes() {
+    async function loadContent() {
         try {
-            const response = await fetch(QUOTES_PATH);
-            const quotes = await response.json();
-            return quotes.map(quote => ({ type: 'quote', data: quote }));
+            const response = await fetch(CONTENT_PATH);
+            const content = await response.json();
+            return content.map(item => ({ type: item.type, data: item }));
         } catch (error) {
-            console.error('Failed to load quotes:', error);
-            return [];
-        }
-    }
-
-    async function loadFormulas() {
-        try {
-            const response = await fetch(FORMULAS_PATH);
-            const formulas = await response.json();
-            return formulas.map(formula => ({ type: 'formula', data: formula }));
-        } catch (error) {
-            console.error('Failed to load formulas:', error);
+            console.error('Failed to load content:', error);
             return [];
         }
     }
@@ -199,7 +187,7 @@
             const manifest = await response.json();
 
             return manifest.files
-                .filter(filename => filename !== 'quotes.json' && filename !== 'formulas.json')
+                .filter(filename => filename !== 'content.json')
                 .map(filename => ({ type: 'image', data: filename }));
         } catch (error) {
             loading.textContent = 'Error loading moodboard: ' + error.message;
@@ -209,8 +197,8 @@
     }
 
     async function loadMoodboard() {
-        const [images, quotes, formulas] = await Promise.all([loadImages(), loadQuotes(), loadFormulas()]);
-        const allItems = shuffleArray([...images, ...quotes, ...formulas]);
+        const [images, content] = await Promise.all([loadImages(), loadContent()]);
+        const allItems = shuffleArray([...images, ...content]);
 
         allItems.forEach(item => {
             if (item.type === 'quote') {
@@ -239,7 +227,9 @@
             }
         });
 
-        console.log(`Loaded ${allItems.length} items (${images.length} images, ${quotes.length} quotes, ${formulas.length} formulas)`);
+        const quotes = content.filter(c => c.type === 'quote').length;
+        const formulas = content.filter(c => c.type === 'formula').length;
+        console.log(`Loaded ${allItems.length} items (${images.length} images, ${quotes} quotes, ${formulas} formulas)`);
         loading.style.display = 'none';
     }
 
