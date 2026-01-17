@@ -4,234 +4,405 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Moodboard</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-    <style>
-        body {
-            margin: 0;
-            padding: 5px;
-            background-color: #1a1a1a;
-            font-family: Arial, sans-serif;
-        }
-        #board {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 3px;
-            align-items: flex-start;
-        }
-        .board-item {
-            flex-grow: 1;
-            min-width: 150px;
-        }
-        .board-item img {
-            width: 100%;
-            height: auto;
-            display: block;
-        }
-        .quote-card {
-            background: #2a2a2a;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-        }
-        .quote-text {
-            font-size: 14px;
-            line-height: 1.3;
-            color: #e0e0e0;
-            margin-bottom: 12px;
-            font-style: italic;
-        }
-        .quote-text::before {
-            content: '"';
-        }
-        .quote-text::after {
-            content: '"';
-        }
-        .quote-author {
-            font-size: 6px;
-            color: #a0a0a0;
-            text-align: right;
-        }
-        .quote-source {
-            font-size: 5px;
-            color: #707070;
-            text-align: right;
-            margin-top: 2px;
-        }
-        .formula-card {
-            background: #2a2a2a;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-        }
-        .formula-content {
-            color: #e0e0e0;
-            margin-bottom: 6px;
-            text-align: center;
-        }
-        .formula-content:last-of-type {
-            margin-bottom: 8px;
-        }
-        .formula-label {
-            font-size: 6px;
-            color: #707070;
-            text-align: right;
-            margin-top: 4px;
-        }
-        #loading {
-            text-align: center;
-            padding: 40px;
-            color: #999;
-        }
-    </style>
+    <link rel="stylesheet" href="styles.css">
+    <script src="database.js"></script>
 </head>
 <body>
     <div id="loading">Loading...</div>
     <div id="board"></div>
+
+    <!-- FAB Button -->
+    <div id="fab">
+        <button id="fabButton" onclick="toggleFabMenu()"><span></span></button>
+    </div>
+
+    <!-- FAB Menu -->
+    <div id="fabMenu" class="hidden">
+        <div id="moodboardList"></div>
+        <div id="newMoodboardBtn" class="new-moodboard-item" onclick="showModal()">+ New Moodboard</div>
+    </div>
+
+    <!-- Modal -->
+    <div id="modal" class="hidden">
+        <div id="modalOverlay" onclick="hideModal()"></div>
+        <div id="modalContent">
+            <h2>New Moodboard</h2>
+            <input type="text" id="moodboardNameInput" placeholder="Moodboard name" autocomplete="off">
+            <div class="modal-actions">
+                <button id="createEmptyBtn" onclick="handleCreateEmptyMoodboard()">Create Empty</button>
+                <button id="createImportBtn" onclick="handleCreateImportMoodboard()">Create & Import</button>
+                <button id="cancelBtn" onclick="hideModal()">Cancel</button>
+            </div>
+            <input type="file" id="importFileInput" accept="application/json" class="hidden" onchange="handleImportFileSelected(event)">
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="contextMenu">
+        <div id="deleteOption" onclick="handleDeleteImage()">Delete</div>
+    </div>
+
+    <!-- Templates -->
+    <template id="moodboard-item-template">
+        <div class="moodboard-item">
+            <div class="moodboard-name"></div>
+        </div>
+    </template>
+
+    <template id="moodboard-sub-item-template">
+        <div class="moodboard-sub-item"></div>
+    </template>
 </body>
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script>
     const board = document.getElementById("board");
     const loading = document.getElementById("loading");
-    const MANIFEST_PATH = 'manifest.json';
-    const STATIC_FOLDER = 'static';
-    const CONTENT_PATH = `${STATIC_FOLDER}/content.json`;
 
-    function createQuoteCard(quote) {
-        const item = document.createElement('div');
-        item.className = 'board-item';
-        item.style.flexBasis = `${150 + Math.random() * 100}px`;
-
-        const card = document.createElement('div');
-        card.className = 'quote-card';
-
-        const text = document.createElement('div');
-        text.className = 'quote-text';
-        text.textContent = quote.text;
-        card.appendChild(text);
-
-        if (quote.author) {
-            const author = document.createElement('div');
-            author.className = 'quote-author';
-            author.textContent = `— ${quote.author}`;
-            card.appendChild(author);
+    // UI Functions
+    function toggleFabMenu() {
+        const fabMenu = document.getElementById('fabMenu');
+        fabMenu.classList.toggle('hidden');
+        if (!fabMenu.classList.contains('hidden')) {
+            renderMoodboardList();
         }
-
-        if (quote.source) {
-            const source = document.createElement('div');
-            source.className = 'quote-source';
-            source.textContent = quote.source;
-            card.appendChild(source);
-        }
-
-        item.appendChild(card);
-        return item;
     }
 
-    function createFormulaCard(formula) {
-        const item = document.createElement('div');
-        item.className = 'board-item';
-        item.style.flexBasis = `${250 + Math.random() * 200}px`;
+    async function renderMoodboardList() {
+        const moodboards = await getAllMoodboards();
+        const listDiv = document.getElementById('moodboardList');
+        listDiv.innerHTML = '';
 
-        const card = document.createElement('div');
-        card.className = 'formula-card';
+        // Get templates
+        const moodboardTemplate = document.getElementById('moodboard-item-template');
+        const subItemTemplate = document.getElementById('moodboard-sub-item-template');
 
-        const formulas = formula.formulas || [formula.formula];
-        formulas.forEach(f => {
-            const formulaDiv = document.createElement('div');
-            formulaDiv.className = 'formula-content';
-            try {
-                katex.render(f, formulaDiv, { throwOnError: false });
-            } catch (e) {
-                formulaDiv.textContent = f;
+        moodboards.forEach(moodboard => {
+            // Clone moodboard item template
+            const item = moodboardTemplate.content.cloneNode(true).querySelector('.moodboard-item');
+            if (moodboard.id === currentMoodboardId) {
+                item.classList.add('current');
             }
-            card.appendChild(formulaDiv);
+
+            const nameDiv = item.querySelector('.moodboard-name');
+            nameDiv.textContent = moodboard.name;
+
+            item.addEventListener('click', () => switchMoodboard(moodboard.id));
+            listDiv.appendChild(item);
+
+            // Add sub-options for current moodboard
+            if (moodboard.id === currentMoodboardId) {
+                // Export sub-item
+                const exportDiv = subItemTemplate.content.cloneNode(true).querySelector('.moodboard-sub-item');
+                exportDiv.textContent = 'Export';
+                exportDiv.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    exportCurrentMoodboard();
+                });
+                listDiv.appendChild(exportDiv);
+
+                // Rename sub-item
+                const renameDiv = subItemTemplate.content.cloneNode(true).querySelector('.moodboard-sub-item');
+                renameDiv.textContent = 'Rename';
+                renameDiv.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    renameMoodboard(moodboard.id, moodboard.name);
+                });
+                listDiv.appendChild(renameDiv);
+
+                // Delete sub-item
+                const deleteDiv = subItemTemplate.content.cloneNode(true).querySelector('.moodboard-sub-item');
+                deleteDiv.classList.add('delete');
+                deleteDiv.textContent = 'Delete';
+                deleteDiv.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteMoodboard(moodboard.id, moodboard.name);
+                });
+                listDiv.appendChild(deleteDiv);
+            }
+        });
+    }
+
+    async function switchMoodboard(id) {
+        if (id === currentMoodboardId) {
+            toggleFabMenu();
+            return;
+        }
+
+        await setCurrentMoodboard(id);
+
+        // Clear and reload board
+        board.innerHTML = '';
+        const images = await loadImagesFromDB(id);
+        const shuffled = shuffleArray(images);
+        shuffled.forEach(imageData => {
+            const imageElement = displayImage(imageData);
+            board.appendChild(imageElement);
         });
 
-        if (formula.label) {
-            const label = document.createElement('div');
-            label.className = 'formula-label';
-            label.textContent = formula.label;
-            card.appendChild(label);
-        }
-
-        item.appendChild(card);
-        return item;
+        toggleFabMenu();
+        console.log(`Switched to moodboard (${images.length} images)`);
     }
 
-    function shuffleArray(array) {
-        for (let i = array.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [array[i], array[j]] = [array[j], array[i]];
-        }
-        return array;
+    function showModal() {
+        document.getElementById('modal').classList.remove('hidden');
+        document.getElementById('moodboardNameInput').value = '';
+        document.getElementById('moodboardNameInput').focus();
     }
 
-    async function loadContent() {
+    function hideModal() {
+        document.getElementById('modal').classList.add('hidden');
+    }
+
+    async function renameMoodboard(id, currentName) {
+        const newName = prompt('Enter new name for moodboard:', currentName);
+        if (!newName || newName.trim() === '' || newName === currentName) {
+            return;
+        }
+
+        await updateMoodboardName(id, newName.trim());
+        toggleFabMenu();
+        console.log(`Renamed moodboard to "${newName}"`);
+    }
+
+    async function deleteMoodboard(id, name) {
+        const moodboards = await getAllMoodboards();
+        if (moodboards.length === 1) {
+            alert('Cannot delete the last moodboard');
+            return;
+        }
+
+        const confirmed = confirm(`Are you sure you want to delete "${name}"? This will also delete all its images.`);
+        if (!confirmed) {
+            return;
+        }
+
+        await deleteMoodboardDB(id);
+
+        // Switch to another moodboard
+        const remainingMoodboards = await getAllMoodboards();
+        if (remainingMoodboards.length > 0) {
+            await switchMoodboard(remainingMoodboards[0].id);
+        }
+
+        console.log(`Deleted moodboard "${name}"`);
+    }
+
+    async function handleCreateMoodboard(name, importFile = null) {
+        if (!name || name.trim() === '') {
+            alert('Please enter a moodboard name');
+            return;
+        }
+
         try {
-            const response = await fetch(CONTENT_PATH);
-            const content = await response.json();
-            return content.map(item => ({ type: item.type, data: item }));
+            if (importFile) {
+                await importToMoodboard(importFile, name);
+            } else {
+                const id = await createMoodboard(name);
+                await switchMoodboard(id);
+            }
+            hideModal();
+            toggleFabMenu();
         } catch (error) {
-            console.error('Failed to load content:', error);
-            return [];
-        }
-    }
-
-    async function loadImages() {
-        try {
-            const response = await fetch(MANIFEST_PATH);
-            const manifest = await response.json();
-
-            return manifest.files
-                .filter(filename => filename !== 'content.json')
-                .map(filename => ({ type: 'image', data: filename }));
-        } catch (error) {
-            loading.textContent = 'Error loading moodboard: ' + error.message;
-            console.error('Failed to load manifest:', error);
-            return [];
+            if (error.name === 'ConstraintError') {
+                alert('A moodboard with this name already exists');
+            } else {
+                console.error('Error creating moodboard:', error);
+                alert('Error creating moodboard');
+            }
         }
     }
 
     async function loadMoodboard() {
-        const [images, content] = await Promise.all([loadImages(), loadContent()]);
-        const allItems = shuffleArray([...images, ...content]);
+        await initDB();
 
-        allItems.forEach(item => {
-            if (item.type === 'quote') {
-                const quoteCard = createQuoteCard(item.data);
-                board.appendChild(quoteCard);
-            } else if (item.type === 'formula') {
-                const formulaCard = createFormulaCard(item.data);
-                board.appendChild(formulaCard);
-            } else if (item.type === 'image') {
-                const boardItem = document.createElement('div');
-                boardItem.className = 'board-item';
+        // Check if any moodboards exist
+        let moodboards = await getAllMoodboards();
+        if (moodboards.length === 0) {
+            // Create default moodboard
+            const id = await createMoodboard('My Moodboard');
+            await setCurrentMoodboard(id);
+            moodboards = [{ id, name: 'My Moodboard' }];
+        }
 
-                const img = document.createElement('img');
-                img.src = `${STATIC_FOLDER}/${item.data}`;
-                img.alt = item.data;
-                img.loading = 'lazy';
+        // Load current moodboard
+        currentMoodboardId = await getCurrentMoodboardId();
+        if (!currentMoodboardId || !moodboards.find(m => m.id === currentMoodboardId)) {
+            currentMoodboardId = moodboards[0].id;
+            await setCurrentMoodboard(currentMoodboardId);
+        }
 
-                img.onload = function() {
-                    const aspectRatio = this.naturalWidth / this.naturalHeight;
-                    const randomScale = 150 + Math.random() * 100;
-                    boardItem.style.flexBasis = `${aspectRatio * randomScale}px`;
-                };
-
-                boardItem.appendChild(img);
-                board.appendChild(boardItem);
-            }
+        // Load images
+        const images = await loadImagesFromDB();
+        const shuffled = shuffleArray(images);
+        shuffled.forEach(imageData => {
+            const imageElement = displayImage(imageData);
+            board.appendChild(imageElement);
         });
 
-        const quotes = content.filter(c => c.type === 'quote').length;
-        const formulas = content.filter(c => c.type === 'formula').length;
-        console.log(`Loaded ${allItems.length} items (${images.length} images, ${quotes} quotes, ${formulas} formulas)`);
+        console.log(`Loaded ${images.length} images`);
         loading.style.display = 'none';
     }
+
+    async function addImageToBoard(dataUrl) {
+        const id = await saveImage(dataUrl);
+        const imageElement = displayImage({ id, dataUrl });
+        board.appendChild(imageElement);
+    }
+
+    function handleImageFile(file) {
+        if (!file.type.startsWith('image/')) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            addImageToBoard(e.target.result);
+        };
+        reader.readAsDataURL(file);
+    }
+
+    // Drag and drop support
+    document.body.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+    });
+
+    document.body.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const files = Array.from(e.dataTransfer.files);
+        files.forEach(handleImageFile);
+    });
+
+    // Paste support
+    document.addEventListener('paste', (e) => {
+        const items = Array.from(e.clipboardData.items);
+        items.forEach(item => {
+            if (item.type.startsWith('image/')) {
+                const file = item.getAsFile();
+                if (file) handleImageFile(file);
+            }
+        });
+    });
+
+    // Export/Import functionality
+    async function exportCurrentMoodboard() {
+        const moodboard = await getMoodboard(currentMoodboardId);
+        const images = await loadImagesFromDB(currentMoodboardId);
+        const data = {
+            version: 2,
+            exportDate: new Date().toISOString(),
+            moodboardName: moodboard.name,
+            images: images.map(img => ({ dataUrl: img.dataUrl, timestamp: img.timestamp }))
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${moodboard.name}-${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        console.log(`Exported moodboard: ${moodboard.name}`);
+    }
+
+    async function importToMoodboard(file, moodboardName) {
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        // Create new moodboard
+        const id = await createMoodboard(moodboardName);
+
+        // Import images
+        const prevMoodboardId = currentMoodboardId;
+        currentMoodboardId = id;
+        for (const image of data.images) {
+            await saveImage(image.dataUrl);
+        }
+        currentMoodboardId = prevMoodboardId;
+
+        // Switch to new moodboard
+        await switchMoodboard(id);
+
+        console.log(`Imported ${data.images.length} images to "${moodboardName}"`);
+    }
+
+    // Context menu
+    const contextMenu = document.getElementById('contextMenu');
+    let currentImageId = null;
+
+    function showContextMenu(x, y, imageId) {
+        currentImageId = imageId;
+        contextMenu.style.left = `${x}px`;
+        contextMenu.style.top = `${y}px`;
+        contextMenu.style.display = 'block';
+    }
+
+    function hideContextMenu() {
+        contextMenu.style.display = 'none';
+        currentImageId = null;
+    }
+
+    async function handleDeleteImage() {
+        if (currentImageId !== null) {
+            await deleteImage(currentImageId);
+            const element = board.querySelector(`[data-image-id="${currentImageId}"]`);
+            if (element) {
+                element.remove();
+            }
+        }
+        hideContextMenu();
+    }
+
+    async function handleCreateEmptyMoodboard() {
+        const name = document.getElementById('moodboardNameInput').value.trim();
+        if (name) {
+            await handleCreateMoodboard(name);
+        }
+    }
+
+    function handleCreateImportMoodboard() {
+        const name = document.getElementById('moodboardNameInput').value.trim();
+        if (name) {
+            document.getElementById('importFileInput').click();
+        }
+    }
+
+    async function handleImportFileSelected(e) {
+        const name = document.getElementById('moodboardNameInput').value.trim();
+        const file = e.target.files[0];
+        if (file && name) {
+            await handleCreateMoodboard(name, file);
+            e.target.value = '';
+        }
+    }
+
+    // Click outside to close context menu
+    document.addEventListener('click', (e) => {
+        if (!contextMenu.contains(e.target)) {
+            hideContextMenu();
+        }
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        const modal = document.getElementById('modal');
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+            hideModal();
+        }
+        if (e.key === 'Enter' && !modal.classList.contains('hidden')) {
+            const name = document.getElementById('moodboardNameInput').value.trim();
+            if (name) {
+                handleCreateMoodboard(name);
+            }
+        }
+    });
+
+    // Click outside FAB menu to close
+    document.addEventListener('click', (e) => {
+        const fabMenu = document.getElementById('fabMenu');
+        const fab = document.getElementById('fab');
+        if (!fabMenu.classList.contains('hidden') &&
+            !fabMenu.contains(e.target) &&
+            !fab.contains(e.target)) {
+            toggleFabMenu();
+        }
+    });
 
     loadMoodboard();
 </script>
